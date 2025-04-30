@@ -129,19 +129,28 @@ function VTTParser() {
                 let isPercentage = false;
                 if (val && val.search(/%/) != -1) {
                     isPercentage = true;
-                    val = parseInt(val.replace(/%/, ''), 10);
                 }
                 if (element.match(/^align:/) || element.match(/A/)) {
                     styleObject.align = val;
                 }
                 if (element.match(/^line:/) || element.match(/L/)) {
-                    styleObject.line = val === 'auto' ? val : parseInt(val, 10);
+                    const lineParts = val.split(',');
+                    const lineValue = lineParts[0].replace(/%/, '');
+                    styleObject.line = lineValue === 'auto' ? lineValue : parseInt(lineValue, 10);
                     if (isPercentage) {
                         styleObject.snapToLines = false;
                     }
+                    if (lineParts[1]) {
+                        styleObject.lineAlign = lineParts[1];
+                    }
                 }
                 if (element.match(/^position:/) || element.match(/P/)) {
-                    styleObject.position = val;
+                    const positionParts = val.split(',');
+                    const positionValue = positionParts[0].replace(/%/, '');
+                    styleObject.position = parseInt(positionValue, 10);
+                    if (positionParts[1]) {
+                        styleObject.positionAlign = positionParts[1];
+                    }
                 }
                 if (element.match(/^size:/) || element.match(/S/)) {
                     styleObject.size = val;
