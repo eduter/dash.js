@@ -102,19 +102,6 @@ class IntervalTree {
     }
 
     /**
-     * Finds cues in a sliding window around the current time.
-     *
-     * @param {number} currentTime - Current playback time
-     * @param {number} windowSize - Size of the window in seconds
-     * @returns {TextTrackCue[]} Array of cues in the window
-     */
-    findCuesInWindow(currentTime, windowSize) {
-        const windowStart = Math.max(0, currentTime - windowSize);
-        const windowEnd = currentTime + windowSize;
-        return this.findCuesInRange(windowStart, windowEnd);
-    }
-
-    /**
      * Gets all cues in the tree.
      *
      * @returns {TextTrackCue[]} Array of all cues
@@ -212,7 +199,7 @@ class IntervalTree {
             const [newRight] = this._insert(newNode, subTree.right);
             subTree.right = newRight;
         } else {
-            // Equal intervals - skip duplicate
+            // duplicate cue -> do not insert
             return [subTree, false];
         }
 

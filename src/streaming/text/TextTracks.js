@@ -35,26 +35,8 @@ import MediaPlayerEvents from '../../streaming/MediaPlayerEvents.js';
 import FactoryMaker from '../../core/FactoryMaker.js';
 import Debug from '../../core/Debug.js';
 import Utils from '../../core/Utils.js';
-import {CueSet} from './CueSet.js';
+import {IntervalTree} from './IntervalTree.js';
 import {renderHTML} from 'imsc';
-
-const CUE_PROPS_TO_COMPARE = [
-    'text',
-    'align',
-    'fontSize',
-    'id',
-    'isd',
-    'line',
-    'lineAlign',
-    'lineHeight',
-    'linePadding',
-    'position',
-    'positionAlign',
-    'region',
-    'size',
-    'snapToLines',
-    'vertical',
-];
 
 function TextTracks(config) {
 
@@ -83,7 +65,9 @@ function TextTracks(config) {
         topZIndex,
         resizeObserver,
         hasRequestAnimationFrame,
-        currentCaptionEventCue;
+        currentCaptionEventCue,
+        intervalTrees,
+        lastCueWindowUpdate;
 
     function setup() {
         logger = Debug(context).getInstance().getLogger(instance);
@@ -109,6 +93,8 @@ function TextTracks(config) {
         topZIndex = 2147483647;
         previousISDState = null;
         hasRequestAnimationFrame = ('requestAnimationFrame' in window);
+        intervalTrees = [];
+        lastCueWindowUpdate = {};
 
         if (document.fullscreenElement !== undefined) {
             fullscreenAttribute = 'fullscreenElement'; // Standard and Edge
@@ -134,6 +120,13 @@ function TextTracks(config) {
         captionContainer = videoModel.getTTMLRenderingDiv();
         vttCaptionContainer = videoModel.getVttRenderingDiv();
         let defaultIndex = -1;
+
+        // Initialize interval trees for each track
+        intervalTrees = [];
+        for (let i = 0; i < textTrackInfos.length; i++) {
+            intervalTrees[i] = new IntervalTree();
+        }
+
         for (let i = 0; i < textTrackInfos.length; i++) {
             const nativeTexttrack = _createNativeTextrackElement(textTrackInfos[i]);
 
@@ -207,6 +200,83 @@ function TextTracks(config) {
 
     function addTextTrackInfo(textTrackInfoVO) {
         textTrackInfos.push(textTrackInfoVO);
+    }
+
+    /**
+     * Updates the TextTrack with cues from the interval tree within the specified window.
+     * This implements virtual scrolling by only adding cues in the window to the native TextTrack.
+     * Only actually updates the TextTrack periodically, according to bufferPruningInterval setting.
+     *
+     * @param {number} trackIdx - Track index
+     * @param {number} currentTime - Current playback time
+     * @param {boolean} forceUpdate - Force update even if interval hasn't passed (default: false)
+     */
+    function updateTextTrackWindow(trackIdx, currentTime, forceUpdate = false) {
+        const track = getTrackByIdx(trackIdx);
+        const tree = intervalTrees[trackIdx];
+
+        if (!track || !tree) {
+            logger.warn(`updateTextTrackWindow: No track or tree found for trackIdx ${trackIdx}`);
+            return;
+        }
+
+        // Get buffer configuration from settings
+        const bufferToKeep = settings.get().streaming.buffer.bufferToKeep;
+        const bufferPruningInterval = settings.get().streaming.buffer.bufferPruningInterval;
+
+        // Check if we need to update based on interval
+        const now = Date.now();
+        const lastUpdate = lastCueWindowUpdate[trackIdx] || 0;
+        const timeSinceLastUpdate = (now - lastUpdate) / 1000; // Convert to seconds
+
+
+
+        // Only update if enough time has passed or if this is a forced update (seeking)
+        if (timeSinceLastUpdate < bufferPruningInterval && !forceUpdate) {
+            console.log(`updateTextTrackWindow`, {
+                trackIdx,
+                currentTime,
+                forceUpdate,
+                timeSinceLastUpdate,
+                shouldUpdate: false
+            });
+            return;
+        }
+
+        // Get current playback rate to adjust window for fast/slow playback
+        const playbackRate = videoModel.getPlaybackRate() || 1;
+
+        // Calculate window based on buffer settings with safety margin and adjusted for playback rate
+        const windowStart = Math.max(0, currentTime - (bufferToKeep / playbackRate));
+        const windowEnd = currentTime + (2 * bufferPruningInterval / playbackRate);
+
+        // Clear existing cues from TextTrack
+        while (track.cues.length > 0) {
+            track.removeCue(track.cues[0]);
+        }
+
+        // Get cues in window from interval tree
+        const windowCues = tree.findCuesInRange(windowStart, windowEnd);
+
+        // Add only window cues to TextTrack
+        windowCues.forEach(cue => {
+            if (track.mode !== Constants.TEXT_DISABLED) {
+                track.addCue(cue);
+            }
+        });
+
+        // Update the last update time
+        lastCueWindowUpdate[trackIdx] = now;
+
+        console.log(`updateTextTrackWindow`, {
+            trackIdx,
+            currentTime,
+            forceUpdate,
+            timeSinceLastUpdate,
+            shouldUpdate: true,
+            windowCues,
+            treeSize: tree.getSize(),
+        });
     }
 
     function getVideoVisibleVideoSize(viewWidth, viewHeight, videoWidth, videoHeight, aspectRatio, use80Percent) {
@@ -437,40 +507,6 @@ function TextTracks(config) {
         }
     }
 
-    // Check that a new cue immediately follows the previous cue
-    function _areCuesAdjacent(cue, prevCue) {
-        if (!prevCue) {
-            return false;
-        }
-        // Check previous cue endTime with current cue startTime
-        // (should we consider an epsilon margin? for example to get around rounding issues)
-        return prevCue.endTime >= cue.startTime;
-    }
-
-    // Check if cue content is identical. If it is, extend the previous cue.
-    function _extendLastCue(cue, prevCue) {
-        if (!settings.get().streaming.text.extendSegmentedCues) {
-            return false;
-        }
-
-        if (!_cuesContentAreEqual(prevCue, cue, CUE_PROPS_TO_COMPARE)) {
-            return false;
-        }
-
-        prevCue.endTime = Math.max(prevCue.endTime, cue.endTime);
-        return true;
-    }
-
-    function _cuesContentAreEqual(cue1, cue2, props) {
-        for (let i = 0; i < props.length; i++) {
-            const key = props[i];
-            if (JSON.stringify(cue1[key]) !== JSON.stringify(cue2[key])) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     function _resolveImagesInContents(cue, contents) {
         if (!contents) {
             return;
@@ -488,17 +524,16 @@ function TextTracks(config) {
      */
     function addCaptions(trackIdx, timeOffset, captionData) {
         const track = getTrackByIdx(trackIdx);
+        const tree = intervalTrees[trackIdx];
         const dispatchForManualRendering = settings.get().streaming.text.dispatchForManualRendering;
 
-        if (!track) {
+        if (!track || !tree) {
             return;
         }
 
         if (!Array.isArray(captionData) || captionData.length === 0) {
             return;
         }
-
-        const cueSet = new CueSet(track.cues);
 
         for (let item = 0; item < captionData.length; item++) {
             let cue = null;
@@ -519,47 +554,15 @@ function TextTracks(config) {
 
             try {
                 if (cue) {
-                    if (!cueSet.hasCue(cue)) {
-                        cueSet.addCue(cue);
-                        if (settings.get().streaming.text.webvtt.customRenderingEnabled) {
-                            if (!track.manualCueList) {
-                                track.manualCueList = [];
-                            }
-                            track.manualCueList.push(cue);
-                        } else {
-                            // Handle adjacent cues
-                            let prevCue;
-                            if (track.cues && track.cues.length !== 0) {
-                                prevCue = track.cues[track.cues.length - 1];
-                            }
+                    // Add cue to interval tree (duplicates are discarded by the tree)
+                    tree.addCue(cue);
 
-                            if (_areCuesAdjacent(cue, prevCue)) {
-                                if (!_extendLastCue(cue, prevCue)) {
-                                    /* If cues are adjacent but not identical (extended), let the render function of the next cue
-                                     * clear up the captionsContainer so removal and appending are instantaneous.
-                                     * Only do this for imsc subs (where isd is present).
-                                     */
-                                    if (prevCue.isd) {
-                                        prevCue.onexit = function () {
-                                        };
-                                    }
-                                    // If cues are added when the track is disabled they can still persist in memory
-                                    if (track.mode !== Constants.TEXT_DISABLED) {
-                                        track.addCue(cue);
-                                    }
-                                }
-                            } else {
-                                if (track.mode !== Constants.TEXT_DISABLED) {
-                                    track.addCue(cue);
-                                }
-                            }
+                    if (settings.get().streaming.text.webvtt.customRenderingEnabled) {
+                        if (!track.manualCueList) {
+                            track.manualCueList = [];
                         }
+                        track.manualCueList.push(cue);
                     }
-
-                    // Remove old cues
-                    const bufferToKeep = settings.get().streaming.buffer.bufferToKeep;
-                    const currentTime = videoModel.getTime();
-                    _deleteOutdatedTrackCues(track, 0, currentTime - bufferToKeep);
                 } else {
                     logger.error('Impossible to display subtitles. You might have missed setting a TTML rendering div via player.attachTTMLRenderingDiv(TTMLRenderingDiv)');
                 }
@@ -886,34 +889,6 @@ function TextTracks(config) {
         return (isNaN(start) || (strict ? cue.startTime : cue.endTime) >= start) && (isNaN(end) || (strict ? cue.endTime : cue.startTime) <= end);
     }
 
-    function _deleteOutdatedTrackCues(track, start, end) {
-
-        if (end < start) {
-            return;
-        }
-
-        if (track && (track.cues || track.manualCueList)) {
-            const mode = track.cues && track.cues.length > 0 ? 'native' : 'custom';
-            const cues = mode === 'native' ? track.cues : track.manualCueList;
-
-            if (!cues || cues.length === 0) {
-                return;
-            }
-            const lastIdx = cues.length - 1;
-
-            for (let r = lastIdx; r >= 0; r--) {
-                if (cueInRange(cues[r], start, end, true) && !_isCueActive(cues[r])) {
-                    if (mode === 'native') {
-                        track.removeCue(cues[r]);
-                    } else {
-                        _removeManualCue(cues[r]);
-                        delete track.manualCueList[r]
-                    }
-                }
-            }
-        }
-    }
-
     function _deleteTrackCues(track, start, end, strict = true) {
         if (track && (track.cues || track.manualCueList)) {
             const mode = track.cues && track.cues.length > 0 ? 'native' : 'custom';
@@ -940,11 +915,7 @@ function TextTracks(config) {
         }
     }
 
-    function _isCueActive(cue) {
-        const currentTime = videoModel.getTime();
 
-        return currentTime >= cue.startTime && currentTime <= cue.endTime
-    }
 
     function deleteCuesFromTrackIdx(trackIdx, start, end) {
         const track = getTrackByIdx(trackIdx);
@@ -973,6 +944,17 @@ function TextTracks(config) {
         }
         currentTrackIdx = -1;
         clearCaptionContainer.call(this);
+
+        // Reset interval tracking
+        lastCueWindowUpdate = {};
+    }
+
+    /**
+     * Resets the interval tracking for cue window updates.
+     * Useful when switching tracks or streams.
+     */
+    function resetCueWindowTracking() {
+        lastCueWindowUpdate = {};
     }
 
     /* Set native cue style to transparent background to avoid it being displayed. */
@@ -1036,6 +1018,18 @@ function TextTracks(config) {
         return textTrackInfos
     }
 
+    /**
+     * Gets the total number of cues in the interval tree for a track.
+     * Useful for debugging virtual scrolling.
+     *
+     * @param {number} trackIdx - Track index
+     * @returns {number} Number of cues in the interval tree
+     */
+    function getIntervalTreeSize(trackIdx) {
+        const tree = intervalTrees[trackIdx];
+        return tree ? tree.getSize() : 0;
+    }
+
     instance = {
         addCaptions,
         addTextTrackInfo,
@@ -1050,8 +1044,10 @@ function TextTracks(config) {
         getTrackIdxForId,
         initialize,
         manualCueProcessing,
+        resetCueWindowTracking,
         setCurrentTrackIdx,
         setModeForTrackIdx,
+        updateTextTrackWindow,
     };
 
     setup();

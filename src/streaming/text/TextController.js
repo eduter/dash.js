@@ -93,10 +93,10 @@ function TextController(config) {
         eventBus.on(Events.DVB_FONT_DOWNLOAD_FAILED, _onFontDownloadFailure, instance);
         eventBus.on(Events.DVB_FONT_DOWNLOAD_COMPLETE, _onFontDownloadSuccess, instance);
         eventBus.on(Events.MEDIAINFO_UPDATED, _onMediaInfoUpdated, instance);
-        if (settings.get().streaming.text.webvtt.customRenderingEnabled) {
-            eventBus.on(Events.PLAYBACK_TIME_UPDATED, _onPlaybackTimeUpdated, instance);
-            eventBus.on(Events.PLAYBACK_SEEKING, _onPlaybackSeeking, instance);
-        }
+        eventBus.on(Events.PLAYBACK_TIME_UPDATED, _onPlaybackTimeUpdated, instance);
+        eventBus.on(Events.PLAYBACK_SEEKING, _onPlaybackSeeking, instance);
+        eventBus.on(Events.PLAYBACK_SEEKED, _onPlaybackSeeked, instance);
+        eventBus.on(MediaPlayerEvents.FRAGMENT_LOADING_COMPLETED, _onFragmentLoadingCompleted, instance);
     }
 
     function initializeForStream(streamInfo) {
@@ -274,7 +274,18 @@ function TextController(config) {
             if (!textTracks[streamId] || isNaN(e.time)) {
                 return;
             }
-            textTracks[streamId].manualCueProcessing(e.time);
+
+            const tracks = textTracks[streamId];
+
+            if (settings.get().streaming.text.webvtt.customRenderingEnabled) {
+                // Handle manual cue processing for custom rendering
+                tracks.manualCueProcessing(e.time);
+            } else {
+                // Update virtual scrolling window for native rendering
+                for (let i = 0; i < tracks.getTextTrackInfos().length; i++) {
+                    tracks.updateTextTrackWindow(i, e.time);
+                }
+            }
         } catch (err) {
         }
     }
@@ -289,6 +300,48 @@ function TextController(config) {
             textTracks[streamId].disableManualTracks();
         } catch (e) {
 
+        }
+    }
+
+    function _onPlaybackSeeked(e) {
+        console.log('_onPlaybackSeeked');
+        try {
+            if (!textTracks[e.streamId]) {
+                return;
+            }
+
+            const currentTime = videoModel.getTime() || 0;
+            const tracks = textTracks[e.streamId];
+
+            // Update cue window when seeking is complete
+            for (let i = 0; i < tracks.getTextTrackInfos().length; i++) {
+                tracks.updateTextTrackWindow(i, currentTime, true);
+            }
+        } catch (e) {
+            logger.error(e);
+        }
+    }
+
+    function _onFragmentLoadingCompleted(e) {
+        try {
+            // Only handle text fragments
+            if (!e || !e.mediaType || e.mediaType !== Constants.TEXT) {
+                return;
+            }
+
+            if (!textTracks[e.streamId]) {
+                return;
+            }
+
+            // Update cue window again when new text fragments are loaded
+            const tracks = textTracks[e.streamId];
+            const currentTime = videoModel.getTime() || 0;
+
+            for (let i = 0; i < tracks.getTextTrackInfos().length; i++) {
+                tracks.updateTextTrackWindow(i, currentTime, true);
+            }
+        } catch (e) {
+            logger.error(e);
         }
     }
 
@@ -373,6 +426,8 @@ function TextController(config) {
         }
 
         textTracks[streamId].disableManualTracks();
+
+        textTracks[streamId].resetCueWindowTracking();
 
         let currentTrackInfo = textTracks[streamId].getCurrentTextTrackInfo();
         let currentNativeTrackInfo = (currentTrackInfo) ? videoModel.getTextTrack(currentTrackInfo.kind, currentTrackInfo.id, currentTrackInfo.lang, currentTrackInfo.isTTML, currentTrackInfo.isEmbedded) : null;
@@ -546,10 +601,9 @@ function TextController(config) {
         eventBus.off(Events.DVB_FONT_DOWNLOAD_FAILED, _onFontDownloadFailure, instance);
         eventBus.off(Events.DVB_FONT_DOWNLOAD_COMPLETE, _onFontDownloadSuccess, instance);
         eventBus.off(Events.MEDIAINFO_UPDATED, _onMediaInfoUpdated, instance);
-        if (settings.get().streaming.text.webvtt.customRenderingEnabled) {
-            eventBus.off(Events.PLAYBACK_TIME_UPDATED, _onPlaybackTimeUpdated, instance);
-            eventBus.off(Events.PLAYBACK_SEEKING, _onPlaybackSeeking, instance)
-        }
+        eventBus.off(Events.PLAYBACK_TIME_UPDATED, _onPlaybackTimeUpdated, instance);
+        eventBus.off(Events.PLAYBACK_SEEKING, _onPlaybackSeeking, instance);
+        eventBus.off(Events.PLAYBACK_SEEKED, _onPlaybackSeeked, instance);
     }
 
     instance = {
