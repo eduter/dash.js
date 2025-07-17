@@ -229,17 +229,8 @@ function TextTracks(config) {
         const lastUpdate = lastCueWindowUpdate[trackIdx] || 0;
         const timeSinceLastUpdate = (now - lastUpdate) / 1000; // Convert to seconds
 
-
-
         // Only update if enough time has passed or if this is a forced update (seeking)
         if (timeSinceLastUpdate < bufferPruningInterval && !forceUpdate) {
-            console.log(`updateTextTrackWindow`, {
-                trackIdx,
-                currentTime,
-                forceUpdate,
-                timeSinceLastUpdate,
-                shouldUpdate: false
-            });
             return;
         }
 
@@ -268,15 +259,8 @@ function TextTracks(config) {
         // Update the last update time
         lastCueWindowUpdate[trackIdx] = now;
 
-        console.log(`updateTextTrackWindow`, {
-            trackIdx,
-            currentTime,
-            forceUpdate,
-            timeSinceLastUpdate,
-            shouldUpdate: true,
-            windowCues,
-            treeSize: tree.getSize(),
-        });
+        logger.debug(`updated cue window to [${windowStart}, ${windowEnd}] for track ${trackIdx} with ${windowCues.length} cues. Current time: ${currentTime}, forceUpdate: ${forceUpdate}, timeSinceLastUpdate: ${timeSinceLastUpdate} seconds, tree size: ${tree.getSize()}`);
+
     }
 
     function getVideoVisibleVideoSize(viewWidth, viewHeight, videoWidth, videoHeight, aspectRatio, use80Percent) {

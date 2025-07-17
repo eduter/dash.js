@@ -121,7 +121,7 @@ describe('TextTracks', function () {
             ]);
 
             // Update the TextTrack window so that all test cues are added to the TextTrack
-            textTracks.updateTextTrackWindow(0, 0);
+            textTracks.updateTextTrackWindow(0, 0, 30);
 
             expect(track.cues.length).to.equal(3);
         });

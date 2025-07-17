@@ -147,7 +147,7 @@ describe('TextController', function () {
             expect(mockTextTracks.updateTextTrackWindow.secondCall.args).to.deep.equal([1, 15.5, 30, false]);
         });
 
-        it('should update text track window when seeking completes', function () {
+        it('should update text track window during seeking', function () {
             // Mock the text tracks to spy on updateTextTrackWindow
             const mockTextTracks = {
                 getTextTrackInfos: () => [{ id: 'track1' }, { id: 'track2' }],
@@ -158,15 +158,13 @@ describe('TextController', function () {
             // Replace the textTracks with our mock
             textController.textTracks = { [streamInfo.id]: mockTextTracks };
             
-            // Mock videoModel.getTime() to return a specific time
-            videoModelMock.getTime = sinon.stub().returns(25.0);
-            
-            // Simulate seeked event
+            // Simulate seeking event
             const event = {
-                streamId: streamInfo.id
+                streamId: streamInfo.id,
+                seekTime: 25.0
             };
             
-            textController._onPlaybackSeeked(event);
+            textController._onPlaybackSeeking(event);
             
             // Verify that updateTextTrackWindow was called for each track
             expect(mockTextTracks.updateTextTrackWindow.calledTwice).to.be.true;

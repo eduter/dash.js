@@ -291,6 +291,7 @@ function TextController(config) {
     }
 
     function _onPlaybackSeeking(e) {
+        logger.debug('_onPlaybackSeeking');
         try {
             const streamId = e.streamId;
 
@@ -304,7 +305,7 @@ function TextController(config) {
     }
 
     function _onPlaybackSeeked(e) {
-        console.log('_onPlaybackSeeked');
+        logger.debug('_onPlaybackSeeked');
         try {
             if (!textTracks[e.streamId]) {
                 return;
@@ -323,6 +324,7 @@ function TextController(config) {
     }
 
     function _onFragmentLoadingCompleted(e) {
+        logger.debug(`_onFragmentLoadingCompleted() for streamId: ${e.streamId}, mediaType: ${e.mediaType}`);
         try {
             // Only handle text fragments
             if (!e || !e.mediaType || e.mediaType !== Constants.TEXT) {
@@ -333,13 +335,10 @@ function TextController(config) {
                 return;
             }
 
-            // Update cue window again when new text fragments are loaded
-            const tracks = textTracks[e.streamId];
-            const currentTime = videoModel.getTime() || 0;
-
-            for (let i = 0; i < tracks.getTextTrackInfos().length; i++) {
-                tracks.updateTextTrackWindow(i, currentTime, true);
-            }
+            // Reset cue window tracking to force update on next time update
+            // This ensures cues have been processed and added to the interval tree
+            textTracks[e.streamId].resetCueWindowTracking();
+            logger.debug('Text fragment loaded, reset cue window tracking to force next update');
         } catch (e) {
             logger.error(e);
         }
