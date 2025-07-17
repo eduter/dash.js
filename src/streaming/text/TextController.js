@@ -291,7 +291,6 @@ function TextController(config) {
     }
 
     function _onPlaybackSeeking(e) {
-        logger.debug('_onPlaybackSeeking');
         try {
             const streamId = e.streamId;
 
@@ -305,7 +304,6 @@ function TextController(config) {
     }
 
     function _onPlaybackSeeked(e) {
-        logger.debug('_onPlaybackSeeked');
         try {
             if (!textTracks[e.streamId]) {
                 return;

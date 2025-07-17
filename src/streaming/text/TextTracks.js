@@ -67,7 +67,8 @@ function TextTracks(config) {
         hasRequestAnimationFrame,
         currentCaptionEventCue,
         intervalTrees,
-        lastCueWindowUpdate;
+        lastCueWindowUpdate,
+        activeCues;
 
     function setup() {
         logger = Debug(context).getInstance().getLogger(instance);
@@ -95,6 +96,7 @@ function TextTracks(config) {
         hasRequestAnimationFrame = ('requestAnimationFrame' in window);
         intervalTrees = [];
         lastCueWindowUpdate = {};
+        activeCues = [];
 
         if (document.fullscreenElement !== undefined) {
             fullscreenAttribute = 'fullscreenElement'; // Standard and Edge
@@ -540,13 +542,6 @@ function TextTracks(config) {
                 if (cue) {
                     // Add cue to interval tree (duplicates are discarded by the tree)
                     tree.addCue(cue);
-
-                    if (settings.get().streaming.text.webvtt.customRenderingEnabled) {
-                        if (!track.manualCueList) {
-                            track.manualCueList = [];
-                        }
-                        track.manualCueList.push(cue);
-                    }
                 } else {
                     logger.error('Impossible to display subtitles. You might have missed setting a TTML rendering div via player.attachTTMLRenderingDiv(TTMLRenderingDiv)');
                 }
@@ -727,28 +722,68 @@ function TextTracks(config) {
 
         if (activeTracks && activeTracks.length > 0) {
             const targetTrack = activeTracks[0];
-            const cues = targetTrack.manualCueList;
 
-            if (cues && cues.length > 0) {
-                cues.forEach((cue) => {
-                    // Render cue if target time is reached and not in active state
-                    if (cue.startTime <= time && cue.endTime >= time && !cue.isActive) {
-                        cue.isActive = true;
-                        if (settings.get().streaming.text.dispatchForManualRendering) {
-                            _triggerCueEnter(cue);
-                        } else {
-                            // eslint-disable-next-line no-undef
-                            WebVTT.processCues(window, [cue], vttCaptionContainer, cue.cueID);
-                        }
-                    } else if (cue.isActive && (cue.startTime > time || cue.endTime < time)) {
-                        cue.isActive = false;
-                        if (settings.get().streaming.text.dispatchForManualRendering) {
-                            _triggerCueExit(cue);
-                        } else {
-                            _removeManualCue(cue);
-                        }
-                    }
-                })
+            // Find the track index by matching the native track with textTrackInfos
+            let trackIdx = -1;
+            for (let i = 0; i < textTrackInfos.length; i++) {
+                const trackInfo = textTrackInfos[i];
+                // Match by label (which is usually the same as id) or language
+                if (trackInfo.id === targetTrack.label || trackInfo.lang === targetTrack.language) {
+                    trackIdx = i;
+                    break;
+                }
+            }
+
+            const tree = intervalTrees[trackIdx];
+
+            if (!tree) {
+                logger.warn(`manualCueProcessing: No tree found for track index ${trackIdx}`);
+                return;
+            }
+
+            const prevActiveCues = activeCues;
+
+            // Get all cues that should be active at the current time
+            const newActiveCues = tree.findCuesInRange(time, time);
+
+            const cuesToExit = prevActiveCues.filter(cue => !newActiveCues.includes(cue));
+            const cuesToEnter = newActiveCues.filter(cue => !prevActiveCues.includes(cue));
+
+            if (cuesToEnter.length > 0 || cuesToExit.length > 0) {
+                console.group(`manualCueProcessing: Processing cues at time ${time}`);
+            }
+
+            // Exit cues that are no longer active
+            cuesToExit.forEach((cue) => {
+                cue.isActive = false;
+                console.log(`CUE_EXIT: ${cueToString(cue)}`);
+
+                if (settings.get().streaming.text.dispatchForManualRendering) {
+                    _triggerCueExit(cue);
+                } else {
+                    _removeManualCue(cue);
+                }
+            });
+
+            // Enter cues that are newly active
+            cuesToEnter.forEach((cue) => {
+                cue.isActive = true;
+                console.log(`CUE_ENTER: ${cueToString(cue)}`);
+                if (settings.get().streaming.text.dispatchForManualRendering) {
+                    _triggerCueEnter(cue);
+                } else {
+                    // eslint-disable-next-line no-undef
+                    WebVTT.processCues(window, [cue], vttCaptionContainer, cue.cueID);
+                }
+            });
+
+            // Update the activeCues array to reflect the current state
+            activeCues.length = 0; // Clear the array
+            newActiveCues.forEach(cue => activeCues.push(cue));
+
+            if (cuesToEnter.length > 0 || cuesToExit.length > 0) {
+                console.log('Active Cues:', activeCues.map(cueToString));
+                console.groupEnd();
             }
         }
     }
@@ -768,15 +803,38 @@ function TextTracks(config) {
     function disableManualTracks() {
         const activeTracks = _getManualActiveTracks();
 
+        // console.log(`disableManualTracks: Called with ${activeTracks.length} active tracks, ${activeCues.length} active cues`);
+
         if (activeTracks && activeTracks.length > 0) {
             const targetTrack = activeTracks[0];
-            const cues = targetTrack.manualCueList;
 
+            // Find the track index by matching the native track with textTrackInfos
+            let trackIdx = -1;
+            for (let i = 0; i < textTrackInfos.length; i++) {
+                const trackInfo = textTrackInfos[i];
+                // Match by label (which is usually the same as id) or language
+                if (trackInfo.id === targetTrack.label || trackInfo.lang === targetTrack.language) {
+                    trackIdx = i;
+                    break;
+                }
+            }
 
-            if (cues && cues.length > 0) {
-                cues.forEach((cue) => {
+            const tree = intervalTrees[trackIdx];
+
+            if (!tree) {
+                return;
+            }
+
+            // Get all cues from the tree and disable active ones
+            // Note: This is a simplified approach. In a more sophisticated implementation,
+            // we might want to track active cues separately for better performance
+            const allCues = tree.getAllCues();
+
+            if (allCues && allCues.length > 0) {
+                allCues.forEach((cue) => {
                     if (cue.isActive) {
                         cue.isActive = false;
+                        console.log(`CUE_EXIT: ${cueToString(cue)}`);
                         if (settings.get().streaming.text.dispatchForManualRendering) {
                             _triggerCueExit(cue);
                         } else if (vttCaptionContainer) {
@@ -789,8 +847,12 @@ function TextTracks(config) {
                             }
                         }
                     }
-                })
+                });
             }
+
+            // Clear the activeCues array when disabling tracks
+            activeCues.length = 0;
+            console.log('disableManualTracks: Cleared activeCues array');
         }
     }
 
@@ -874,27 +936,41 @@ function TextTracks(config) {
     }
 
     function _deleteTrackCues(track, start, end, strict = true) {
-        if (track && (track.cues || track.manualCueList)) {
-            const mode = track.cues && track.cues.length > 0 ? 'native' : 'custom';
-            const cues = mode === 'native' ? track.cues : track.manualCueList;
+        if (!track) {
+            return;
+        }
 
-            if (!cues || cues.length === 0) {
-                return;
-            }
-            const lastIdx = cues.length - 1;
-
+        // Handle native cues
+        if (track.cues && track.cues.length > 0) {
+            const lastIdx = track.cues.length - 1;
             for (let r = lastIdx; r >= 0; r--) {
-                if (cueInRange(cues[r], start, end, strict)) {
-                    if (mode === 'native') {
-                        if (cues[r].onexit) {
-                            cues[r].onexit();
-                        }
-                        track.removeCue(cues[r]);
-                    } else {
-                        _removeManualCue(cues[r]);
-                        delete track.manualCueList[r]
+                if (cueInRange(track.cues[r], start, end, strict)) {
+                    if (track.cues[r].onexit) {
+                        track.cues[r].onexit();
                     }
+                    track.removeCue(track.cues[r]);
                 }
+            }
+        }
+
+        // Handle manual cues using interval tree
+        const trackIdx = getTrackIdxForId(track.id);
+        if (trackIdx >= 0) {
+            const tree = intervalTrees[trackIdx];
+            if (tree) {
+                const cuesInRange = tree.findCuesInRange(start, end);
+                cuesInRange.forEach(cue => {
+                    if (cue.isActive) {
+                        cue.isActive = false;
+                        console.log(`CUE_EXIT: ${cueToString(cue)}`);
+
+                        if (settings.get().streaming.text.dispatchForManualRendering) {
+                            _triggerCueExit(cue);
+                        } else {
+                            _removeManualCue(cue);
+                        }
+                    }
+                });
             }
         }
     }
@@ -1002,17 +1078,7 @@ function TextTracks(config) {
         return textTrackInfos
     }
 
-    /**
-     * Gets the total number of cues in the interval tree for a track.
-     * Useful for debugging virtual scrolling.
-     *
-     * @param {number} trackIdx - Track index
-     * @returns {number} Number of cues in the interval tree
-     */
-    function getIntervalTreeSize(trackIdx) {
-        const tree = intervalTrees[trackIdx];
-        return tree ? tree.getSize() : 0;
-    }
+
 
     instance = {
         addCaptions,
@@ -1041,3 +1107,6 @@ function TextTracks(config) {
 
 TextTracks.__dashjs_factory_name = 'TextTracks';
 export default FactoryMaker.getClassFactory(TextTracks);
+
+// TODO: remove this
+const cueToString = (cue) => `[${cue.startTime}, ${cue.endTime}) ${cue.text || cue.cueID}`;

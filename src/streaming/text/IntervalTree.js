@@ -285,20 +285,23 @@ class IntervalTree {
 
     /**
      * Checks if two time ranges overlap.
+     * Uses WebVTT half-open interval logic: [start, end) where end is exclusive.
      *
      * @param {number} start1 - Start of first range
-     * @param {number} end1 - End of first range
+     * @param {number} end1 - End of first range (exclusive)
      * @param {number} start2 - Start of second range
-     * @param {number} end2 - End of second range
+     * @param {number} end2 - End of second range (exclusive)
      * @returns {boolean} True if ranges overlap
      * @private
      */
     _overlaps(start1, end1, start2, end2) {
-        // For point queries (start2 === end2), check if the point is within the range (inclusive at end)
+        // For point queries (start2 === end2), check if the point is within the range
+        // WebVTT uses half-open intervals, so point must be >= start and < end
         if (start2 === end2) {
-            return start1 <= start2 && start2 <= end1;
+            return start1 <= start2 && start2 < end1;
         }
         // For range queries, check if the ranges intersect (proper overlap)
+        // WebVTT half-open intervals: [start1, end1) and [start2, end2)
         return start1 < end2 && start2 < end1;
     }
 
