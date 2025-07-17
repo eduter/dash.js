@@ -8,6 +8,7 @@ import AdapterMock from '../../mocks/AdapterMock.js';
 import Settings from '../../../../src/core/Settings.js';
 
 import {expect} from 'chai';
+import sinon from 'sinon';
 const context = {};
 
 describe('TextController', function () {
@@ -117,6 +118,61 @@ describe('TextController', function () {
 
             textController.setTextTrack(streamInfo.id, 0);
             expect(textController.getAllTracksAreDisabled()).to.be.false; // jshint ignore:line
+        });
+    });
+
+    describe('Virtual Scrolling Integration', function () {
+        it('should update text track window during playback time updates', function () {
+            // Mock the text tracks to spy on updateTextTrackWindow
+            const mockTextTracks = {
+                getTextTrackInfos: () => [{ id: 'track1' }, { id: 'track2' }],
+                updateTextTrackWindow: sinon.spy(),
+                manualCueProcessing: sinon.spy()
+            };
+            
+            // Replace the textTracks with our mock
+            textController.textTracks = { [streamInfo.id]: mockTextTracks };
+            
+            // Simulate playback time update
+            const event = {
+                streamId: streamInfo.id,
+                time: 15.5
+            };
+            
+            textController._onPlaybackTimeUpdated(event);
+            
+            // Verify that updateTextTrackWindow was called for each track
+            expect(mockTextTracks.updateTextTrackWindow.calledTwice).to.be.true;
+            expect(mockTextTracks.updateTextTrackWindow.firstCall.args).to.deep.equal([0, 15.5, 30, false]);
+            expect(mockTextTracks.updateTextTrackWindow.secondCall.args).to.deep.equal([1, 15.5, 30, false]);
+        });
+
+        it('should update text track window when seeking completes', function () {
+            // Mock the text tracks to spy on updateTextTrackWindow
+            const mockTextTracks = {
+                getTextTrackInfos: () => [{ id: 'track1' }, { id: 'track2' }],
+                updateTextTrackWindow: sinon.spy(),
+                disableManualTracks: sinon.spy()
+            };
+            
+            // Replace the textTracks with our mock
+            textController.textTracks = { [streamInfo.id]: mockTextTracks };
+            
+            // Mock videoModel.getTime() to return a specific time
+            videoModelMock.getTime = sinon.stub().returns(25.0);
+            
+            // Simulate seeked event
+            const event = {
+                streamId: streamInfo.id
+            };
+            
+            textController._onPlaybackSeeked(event);
+            
+            // Verify that updateTextTrackWindow was called for each track
+            expect(mockTextTracks.updateTextTrackWindow.calledTwice).to.be.true;
+            expect(mockTextTracks.updateTextTrackWindow.firstCall.args).to.deep.equal([0, 25.0, 30, true]);
+            expect(mockTextTracks.updateTextTrackWindow.secondCall.args).to.deep.equal([1, 25.0, 30, true]);
+            expect(mockTextTracks.disableManualTracks.calledOnce).to.be.true;
         });
     });
 
