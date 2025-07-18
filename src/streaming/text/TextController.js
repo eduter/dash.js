@@ -94,7 +94,9 @@ function TextController(config) {
         eventBus.on(Events.DVB_FONT_DOWNLOAD_COMPLETE, _onFontDownloadSuccess, instance);
         eventBus.on(Events.MEDIAINFO_UPDATED, _onMediaInfoUpdated, instance);
         eventBus.on(Events.PLAYBACK_TIME_UPDATED, _onPlaybackTimeUpdated, instance);
-        eventBus.on(Events.PLAYBACK_SEEKING, _onPlaybackSeeking, instance);
+        if (settings.get().streaming.text.webvtt.customRenderingEnabled) {
+            eventBus.on(Events.PLAYBACK_SEEKING, _onPlaybackSeeking, instance);
+        }
         eventBus.on(Events.PLAYBACK_SEEKED, _onPlaybackSeeked, instance);
     }
 
@@ -269,21 +271,16 @@ function TextController(config) {
     function _onPlaybackTimeUpdated(e) {
         try {
             const streamId = e.streamId;
+            const tracks = textTracks[streamId];
 
-            if (!textTracks[streamId] || isNaN(e.time)) {
+            if (!tracks || isNaN(e.time)) {
                 return;
             }
 
-            const tracks = textTracks[streamId];
+            tracks.updateTextTrackWindow(e.time);
 
             if (settings.get().streaming.text.webvtt.customRenderingEnabled) {
-                // Handle manual cue processing for custom rendering
                 tracks.manualCueProcessing(e.time);
-            } else {
-                // Update virtual scrolling window for native rendering
-                for (let i = 0; i < tracks.getTextTrackInfos().length; i++) {
-                    tracks.updateTextTrackWindow(i, e.time);
-                }
             }
         } catch (err) {
         }
@@ -311,13 +308,7 @@ function TextController(config) {
             const currentTime = videoModel.getTime() || 0;
             const tracks = textTracks[e.streamId];
 
-            // TODO: what if custom rendering is enabled for VTT, but this video has a CEA 608/708 track?
-            // For native rendering, update the cue window, when seeking is complete
-            if (!settings.get().streaming.text.webvtt.customRenderingEnabled) {
-                for (let i = 0; i < tracks.getTextTrackInfos().length; i++) {
-                    tracks.updateTextTrackWindow(i, currentTime, true);
-                }
-            }
+            tracks.updateTextTrackWindow(currentTime, true);
         } catch (e) {
             logger.error(e);
         }
@@ -580,7 +571,9 @@ function TextController(config) {
         eventBus.off(Events.DVB_FONT_DOWNLOAD_COMPLETE, _onFontDownloadSuccess, instance);
         eventBus.off(Events.MEDIAINFO_UPDATED, _onMediaInfoUpdated, instance);
         eventBus.off(Events.PLAYBACK_TIME_UPDATED, _onPlaybackTimeUpdated, instance);
-        eventBus.off(Events.PLAYBACK_SEEKING, _onPlaybackSeeking, instance);
+        if (settings.get().streaming.text.webvtt.customRenderingEnabled) {
+            eventBus.off(Events.PLAYBACK_SEEKING, _onPlaybackSeeking, instance);
+        }
         eventBus.off(Events.PLAYBACK_SEEKED, _onPlaybackSeeked, instance);
     }
 

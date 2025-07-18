@@ -46,6 +46,7 @@ class IntervalTree {
 
     /**
      * Adds a cue to the interval tree.
+     * Duplicates (according to {@link _compareCues}) are discarded.
      *
      * @param {TextTrackCue} cue - The cue to add
      */

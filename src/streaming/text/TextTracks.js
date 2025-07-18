@@ -207,62 +207,72 @@ function TextTracks(config) {
     }
 
     /**
-     * Updates the TextTrack with cues from the interval tree within the specified window.
-     * This implements virtual scrolling by only adding cues in the window to the native TextTrack.
+     * Updates all native TextTrack's with cues within a window around currentTime.
      * Only actually updates the TextTrack periodically, according to bufferPruningInterval setting.
      *
-     * @param {number} trackIdx - Track index
      * @param {number} currentTime - Current playback time
-     * @param {boolean} forceUpdate - Force update even if interval hasn't passed (default: false)
+     * @param {boolean} forceUpdate - Force update even if interval hasn't passed
      */
-    function updateTextTrackWindow(trackIdx, currentTime, forceUpdate = false) {
-        const track = getTrackByIdx(trackIdx);
-        const cueData = tracksCueData.get(track);
+    function updateTextTrackWindow(currentTime, forceUpdate = false) {
+        const trackInfos = getTextTrackInfos();
+        const customVttRenderingEnabled = settings.get().streaming.text.webvtt.customRenderingEnabled;
 
-        if (!track || !cueData) {
-            logger.warn(`updateTextTrackWindow: No track or cueData found for track ${trackIdx}`);
-            return;
-        }
+        // Iterate over all tracks and update those that need native rendering
+        for (let trackIdx = 0; trackIdx < trackInfos.length; trackIdx++) {
+            const trackInfo = trackInfos[trackIdx];
+            const track = getTrackByIdx(trackIdx);
+            const cueData = tracksCueData.get(track);
 
-        // Get buffer configuration from settings
-        const bufferToKeep = settings.get().streaming.buffer.bufferToKeep;
-        const bufferPruningInterval = settings.get().streaming.buffer.bufferPruningInterval;
-
-        // Check if we need to update based on interval
-        const now = Date.now();
-        const lastUpdate = cueData.lastCueWindowUpdate;
-        const timeSinceLastUpdate = (now - lastUpdate) / 1000; // Convert to seconds
-
-        // Only update if enough time has passed or if this is a forced update (seeking)
-        if (timeSinceLastUpdate < bufferPruningInterval && !forceUpdate) {
-            return;
-        }
-
-        // Get current playback rate to adjust window for fast/slow playback
-        const playbackRate = videoModel.getPlaybackRate() || 1;
-
-        // Calculate window based on buffer settings with safety margin and adjusted for playback rate
-        const windowStart = Math.max(0, currentTime - (bufferToKeep / playbackRate));
-        const windowEnd = currentTime + (2 * bufferPruningInterval / playbackRate);
-
-        // Clear existing cues from TextTrack
-        while (track.cues.length > 0) {
-            track.removeCue(track.cues[0]);
-        }
-
-        // Add only window cues to TextTrack
-        const windowCues = cueData.allCues.findCuesInRange(windowStart, windowEnd);
-        windowCues.forEach(cue => {
-            if (track.mode !== Constants.TEXT_DISABLED) {
-                track.addCue(cue);
+            // Skip updates for VTT tracks that use custom rendering
+            if (!trackInfo.isEmbedded && customVttRenderingEnabled) {
+                logger.debug(`Skipping window update for track ${trackIdx} (VTT with custom rendering)`);
+                continue;
             }
-        });
 
-        // Update the last update time
-        cueData.lastCueWindowUpdate = now;
+            if (!track || !cueData) {
+                logger.warn(`updateTextTrackWindow: No track or cueData found for track ${trackIdx}`);
+                continue;
+            }
 
-        logger.debug(`updated cue window to [${windowStart}, ${windowEnd}] for track ${trackIdx} with ${windowCues.length} cues. Current time: ${currentTime}, forceUpdate: ${forceUpdate}, timeSinceLastUpdate: ${timeSinceLastUpdate} seconds, tree size: ${cueData.allCues.getSize()}`);
+            // Get buffer configuration from settings
+            const bufferToKeep = settings.get().streaming.buffer.bufferToKeep;
+            const bufferPruningInterval = settings.get().streaming.buffer.bufferPruningInterval;
 
+            // Check if we need to update based on interval
+            const now = Date.now();
+            const lastUpdate = cueData.lastCueWindowUpdate;
+            const timeSinceLastUpdate = (now - lastUpdate) / 1000; // Convert to seconds
+
+            // Only update if enough time has passed or if this is a forced update (seeking)
+            if (timeSinceLastUpdate < bufferPruningInterval && !forceUpdate) {
+                continue;
+            }
+
+            // Get current playback rate to adjust window for fast/slow playback
+            const playbackRate = videoModel.getPlaybackRate() || 1;
+
+            // Calculate window based on buffer settings with safety margin and adjusted for playback rate
+            const windowStart = Math.max(0, currentTime - (bufferToKeep / playbackRate));
+            const windowEnd = currentTime + (2 * bufferPruningInterval / playbackRate);
+
+            // Clear existing cues from TextTrack
+            while (track.cues.length > 0) {
+                track.removeCue(track.cues[0]);
+            }
+
+            // Add only window cues to TextTrack
+            const windowCues = cueData.allCues.findCuesInRange(windowStart, windowEnd);
+            windowCues.forEach(cue => {
+                if (track.mode !== Constants.TEXT_DISABLED) {
+                    track.addCue(cue);
+                }
+            });
+
+            // Update the last update time
+            cueData.lastCueWindowUpdate = now;
+
+            logger.debug(`updated cue window to [${windowStart}, ${windowEnd}] for track ${trackIdx} with ${windowCues.length} cues. Current time: ${currentTime}, forceUpdate: ${forceUpdate}, timeSinceLastUpdate: ${timeSinceLastUpdate} seconds, tree size: ${cueData.allCues.getSize()}`);
+        }
     }
 
     function getVideoVisibleVideoSize(viewWidth, viewHeight, videoWidth, videoHeight, aspectRatio, use80Percent) {
@@ -542,7 +552,6 @@ function TextTracks(config) {
 
             try {
                 if (cue) {
-                    // Add cue to allCues (duplicates are discarded by the tree)
                     allCues.addCue(cue);
                 } else {
                     logger.error('Impossible to display subtitles. You might have missed setting a TTML rendering div via player.attachTTMLRenderingDiv(TTMLRenderingDiv)');
@@ -936,8 +945,6 @@ function TextTracks(config) {
             cueData.activeCues = currentActiveCues.filter(cue => !cuesToRemove.includes(cue));
         }
     }
-
-
 
     function deleteCuesFromTrackIdx(trackIdx, start, end) {
         const track = getTrackByIdx(trackIdx);

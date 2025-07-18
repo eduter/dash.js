@@ -41,7 +41,7 @@ The TextTracks module now uses virtual scrolling with interval tree storage:
   - `lastCueWindowUpdate`: Timestamp of last window update
   - `activeCues`: Array of currently active cues (replaces `isActive` flag for manual rendering)
 
-**Key Method: `updateTextTrackWindow(trackIdx, currentTime, forceUpdate = false)`**
+**Key Method: `updateTextTrackWindow(currentTime, forceUpdate = false)`**
 - Calculates dynamic window based on buffer settings (`bufferToKeep`, `bufferPruningInterval`)
 - Adjusts window size for playback rate (fast/slow playback)
 - Clears all existing cues from TextTrack
@@ -60,14 +60,15 @@ The TextTracks module now uses virtual scrolling with interval tree storage:
 The TextController orchestrates virtual scrolling during playback:
 
 **Event Handling:**
-- `_onPlaybackTimeUpdated()`: Updates virtual scrolling window for all tracks
-- `_onPlaybackSeeked()`: Forces window update after seeking
+- `_onPlaybackTimeUpdated()`: Updates virtual scrolling window for all tracks (updateTextTrackWindow handles which ones need updates)
+- `_onPlaybackSeeked()`: Forces window update for all tracks (updateTextTrackWindow handles which ones need updates)
 
 **Dual Rendering Support:**
 - **Native Rendering** (`customRenderingEnabled = false`): Uses virtual scrolling with interval tree
 - **Custom Rendering** (`customRenderingEnabled = true`): Uses existing manual cue processing
+- **Mixed Scenarios**: Handles VTT with custom rendering + CEA-608/708 with native rendering in the same stream
 
-The system automatically chooses the appropriate approach based on the `customRenderingEnabled` setting.
+The system automatically chooses the appropriate approach based on track type and `customRenderingEnabled` setting.
 
 ### Performance Optimizations
 

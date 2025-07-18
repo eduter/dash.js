@@ -68,7 +68,7 @@ describe('TextTracks', function () {
             textTracks.createTracks();
             const currrentTrackIdx = textTracks.getCurrentTrackIdx();
             expect(currrentTrackIdx).to.equal(0); // jshint ignore:line
-            
+
             // Check if spies were called
             expect(spyTrackAdded.called).to.be.true;
             expect(spyTracksQueueInit.called).to.be.true;
@@ -91,9 +91,9 @@ describe('TextTracks', function () {
             let track = videoModelMock.getTextTrack('subtitles', 'eng');
 
             textTracks.addCaptions(0, 0, [{type: 'noHtml', data: SUBTITLE_DATA, start: 0, end: 2}]);
-            
+
             // Update the TextTrack window so that the test cue is added to the TextTrack
-            textTracks.updateTextTrackWindow(0, 0, 30);
+            textTracks.updateTextTrackWindow(0);
 
             expect(videoModelMock.getCurrentCue(track).text).to.equal(SUBTITLE_DATA);
         });
@@ -121,7 +121,7 @@ describe('TextTracks', function () {
             ]);
 
             // Update the TextTrack window so that all test cues are added to the TextTrack
-            textTracks.updateTextTrackWindow(0, 0, 30);
+            textTracks.updateTextTrackWindow(0);
 
             expect(track.cues.length).to.equal(3);
         });
@@ -143,9 +143,9 @@ describe('TextTracks', function () {
             ];
 
             textTracks.addCaptions(0, 0, cues);
-            
+
             // Update the TextTrack window so that all test cues are added to the TextTrack
-            textTracks.updateTextTrackWindow(0, 0, 30);
+            textTracks.updateTextTrackWindow(0);
 
             const allCues = track.cues
             expect(allCues.length).to.equal(2);
@@ -174,24 +174,24 @@ describe('TextTracks', function () {
             ];
 
             textTracks.addCaptions(0, 0, cues);
-            
+
             // Update window at time 0 - should only show cues around 0s
-            textTracks.updateTextTrackWindow(0, 0);
+            textTracks.updateTextTrackWindow(0);
             expect(track.cues.length).to.equal(1);
             expect(track.cues[0].text).to.equal('Cue at 0s');
-            
+
             // Update window at time 15 - should only show cues around 15s
-            textTracks.updateTextTrackWindow(0, 15);
+            textTracks.updateTextTrackWindow(15);
             expect(track.cues.length).to.equal(1);
             expect(track.cues[0].text).to.equal('Cue at 10s');
-            
+
             // Update window at time 25 - should only show cues around 25s
-            textTracks.updateTextTrackWindow(0, 25);
+            textTracks.updateTextTrackWindow(25);
             expect(track.cues.length).to.equal(1);
             expect(track.cues[0].text).to.equal('Cue at 20s');
-            
+
             // Update window at time 55 - should only show cues around 55s
-            textTracks.updateTextTrackWindow(0, 55);
+            textTracks.updateTextTrackWindow(55);
             expect(track.cues.length).to.equal(1);
             expect(track.cues[0].text).to.equal('Cue at 50s');
         });
@@ -213,22 +213,22 @@ describe('TextTracks', function () {
             ];
 
             textTracks.addCaptions(0, 0, cues);
-            
+
             // First update should work
-            textTracks.updateTextTrackWindow(0, 5);
+            textTracks.updateTextTrackWindow(5);
             expect(track.cues.length).to.equal(1);
-            
+
             // Clear the track for testing
             while (track.cues.length > 0) {
                 track.removeCue(track.cues[0]);
             }
-            
+
             // Second update within interval should be skipped (no cues added)
-            textTracks.updateTextTrackWindow(0, 5);
+            textTracks.updateTextTrackWindow(5);
             expect(track.cues.length).to.equal(0);
-            
+
             // Force update should work
-            textTracks.updateTextTrackWindow(0, 5, true);
+            textTracks.updateTextTrackWindow(5, true);
             expect(track.cues.length).to.equal(1);
         });
     });
