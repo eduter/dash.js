@@ -690,7 +690,7 @@ function PlaybackController() {
         logger.info('Native video element event: seeked');
         internalSeek = false;
         eventBus.trigger(Events.PLAYBACK_SEEKED, {
-            streamId: streamInfo ? streamInfo.id : null
+            streamId: streamInfo.id
         });
     }
 
