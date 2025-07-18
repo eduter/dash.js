@@ -565,8 +565,7 @@ function TextTracks(config) {
             }
         }
 
-        // After adding new cues, invalidate the cue window
-        resetCueWindowTracking();
+        invalidateCueWindow();
     }
 
     function _handleCaptionEvents(currentItem, timeOffset) {
@@ -979,10 +978,10 @@ function TextTracks(config) {
     }
 
     /**
-     * Resets the interval tracking for cue window updates.
-     * Useful when switching tracks or streams.
+     * Invalidate the cue window for all tracks, forcing an update of the cue window on the next
+     * call to {@link updateTextTrackWindow}.
      */
-    function resetCueWindowTracking() {
+    function invalidateCueWindow() {
         for (const cueData of tracksCueData.values()) {
             cueData.lastCueWindowUpdate = 0;
         }
@@ -1065,7 +1064,7 @@ function TextTracks(config) {
         getTrackIdxForId,
         initialize,
         manualCueProcessing,
-        resetCueWindowTracking,
+        invalidateCueWindow,
         setCurrentTrackIdx,
         setModeForTrackIdx,
         updateTextTrackWindow,

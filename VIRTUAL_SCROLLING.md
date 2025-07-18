@@ -52,7 +52,6 @@ The TextTracks module now uses virtual scrolling with interval tree storage:
 
 **Modified Methods:**
 - `addCaptions()`: Now stores cues in interval tree instead of directly adding to TextTrack
-- `resetCueWindowTracking()`: Resets update tracking when switching tracks
 - `deleteAllTextTracks()`: Clears interval trees and track data
 
 #### 3. **Playback Integration** (`src/streaming/text/TextController.js`)
@@ -197,7 +196,7 @@ The implementation maintains full compatibility with custom rendering:
 
 4. **API Documentation**: Add JSDoc comments to all new public methods:
    - `updateTextTrackWindow()`
-   - `resetCueWindowTracking()`
+   - `invalidateCueWindow()`
    - Interval tree public methods
 
 5. **Code Comments**: Add inline comments explaining complex logic:

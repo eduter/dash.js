@@ -396,7 +396,7 @@ function TextController(config) {
 
         textTracks[streamId].disableManualTracks();
 
-        textTracks[streamId].resetCueWindowTracking();
+        textTracks[streamId].invalidateCueWindow();
 
         let currentTrackInfo = textTracks[streamId].getCurrentTextTrackInfo();
         let currentNativeTrackInfo = (currentTrackInfo) ? videoModel.getTextTrack(currentTrackInfo.kind, currentTrackInfo.id, currentTrackInfo.lang, currentTrackInfo.isTTML, currentTrackInfo.isEmbedded) : null;
