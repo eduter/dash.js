@@ -30,8 +30,8 @@
  */
 
 /**
- * @classdesc Interval Tree for efficient cue management and collision detection.
- * Supports insertion, deletion, range queries, and overlap detection for time-based intervals.
+ * @classdesc Interval Tree for efficient lookup of cues within a time interval.
+ * Lookups are O(log n + k), where n is the total number of cues and k is the number of cues in the interval.
  * @ignore
  */
 class IntervalTree {
@@ -124,6 +124,7 @@ class IntervalTree {
 
     /**
      * Clears all cues from the tree.
+     * @returns {void}
      */
     clear() {
         this.root = null;
@@ -244,6 +245,7 @@ class IntervalTree {
      * @param {number} start - Start time of search range
      * @param {number} end - End time of search range
      * @param {TextTrackCue[]} results - Array to collect results
+     * @returns {void} - the results are collected in the results parameter
      * @private
      */
     _searchRange(node, start, end, results) {
@@ -272,6 +274,7 @@ class IntervalTree {
      *
      * @param {IntervalTreeNode|null} node - Current node
      * @param {TextTrackCue[]} cues - Array to collect cues
+     * @returns {void}
      * @private
      */
     _inorderTraversal(node, cues) {
@@ -331,7 +334,7 @@ class IntervalTree {
     /**
      * Performs a left rotation.
      *
-     * @param {IntervalTreeNode} node - Node to rotate
+     * @param {IntervalTreeNode} node - Node to rotate (must have a right child)
      * @returns {IntervalTreeNode} New root after rotation
      * @private
      */
@@ -370,7 +373,7 @@ class IntervalTree {
     /**
      * Performs a right rotation.
      *
-     * @param {IntervalTreeNode} node - Node to rotate
+     * @param {IntervalTreeNode} node - Node to rotate (must have a left child)
      * @returns {IntervalTreeNode} New root after rotation
      * @private
      */

@@ -742,9 +742,7 @@ function TextTracks(config) {
             }
 
             const prevActiveCues = cueData.activeCues;
-
-            // Get all cues that should be active at the current time
-            const newActiveCues = cueData.allCues.findCuesInRange(time, time);
+            const newActiveCues = cueData.allCues.findCuesAtTime(time);
 
             const cuesToExit = prevActiveCues.filter(cue => !newActiveCues.includes(cue));
             const cuesToEnter = newActiveCues.filter(cue => !prevActiveCues.includes(cue));
