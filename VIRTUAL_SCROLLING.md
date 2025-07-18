@@ -39,7 +39,7 @@ The TextTracks module now uses virtual scrolling with interval tree storage:
 - Each track has `TrackCueData` containing:
   - `allCues`: IntervalTree storing all cues for the track
   - `lastCueWindowUpdate`: Timestamp of last window update
-  - `activeCues`: Array of currently active cues (for manual rendering)
+  - `activeCues`: Array of currently active cues (replaces `isActive` flag for manual rendering)
 
 **Key Method: `updateTextTrackWindow(trackIdx, currentTime, forceUpdate = false)`**
 - Calculates dynamic window based on buffer settings (`bufferToKeep`, `bufferPruningInterval`)
@@ -62,7 +62,6 @@ The TextController orchestrates virtual scrolling during playback:
 **Event Handling:**
 - `_onPlaybackTimeUpdated()`: Updates virtual scrolling window for all tracks
 - `_onPlaybackSeeked()`: Forces window update after seeking
-- `_onFragmentLoadingCompleted()`: Resets tracking when new fragments load
 
 **Dual Rendering Support:**
 - **Native Rendering** (`customRenderingEnabled = false`): Uses virtual scrolling with interval tree
@@ -72,11 +71,10 @@ The system automatically chooses the appropriate approach based on the `customRe
 
 ### Performance Optimizations
 
-#### **Interval-Based Updates**
-- Uses `bufferPruningInterval` setting to control update frequency
-- Only updates cue window if enough time has passed since last update
-- Reduces DOM operations from multiple times per second to once per interval
-- Seeking operations bypass interval check for immediate response
+#### **Cue Window Updates**
+- Periodically updates the window, based on `bufferPruningInterval` setting.
+- After seeking, invaludates cue window, so it gets updated on the next time update.
+- After adding new captions to `allCues` (`addCaptions`), invaludates cue window, so it gets updated on the next time update.
 
 #### **Dynamic Window Sizing**
 - Window size calculated from buffer settings (`bufferToKeep`, `bufferPruningInterval`)
@@ -94,17 +92,14 @@ The system automatically chooses the appropriate approach based on the `customRe
 
 The implementation maintains full compatibility with custom rendering:
 
-**When `customRenderingEnabled = true`:**
-- Uses existing `manualCueProcessing()` method
-- Maintains `activeCues` array for manual rendering
-- Preserves all custom rendering functionality
-- Virtual scrolling is bypassed in favor of manual processing
-
 **When `customRenderingEnabled = false`:**
 - Uses virtual scrolling with interval tree
 - Updates TextTrack directly with windowed cues
-- Leverages native browser subtitle rendering
-- Optimized for performance with large cue sets
+
+**When `customRenderingEnabled = true`:**
+- Replaces `manualCueList` array and `isActive` flag by `allCues` interval tree and `aciveCues` array
+- **Performance Improvement**: Interval tree lookup O(log n + k) instead of O(n) iteration through `manualCueList`
+- Virtual scrolling does not apply
 
 
 ### Benefits
@@ -112,6 +107,7 @@ The implementation maintains full compatibility with custom rendering:
 #### **Performance Improvements**
 - **DOM Operations**: Reduced from multiple times per second to once per interval
 - **Memory Usage**: Efficient storage with O(log n) space complexity
+- **Manual Rendering**: Uses interval tree lookup O(log n + k) instead of O(n) iteration
 - **Seeking Performance**: Fast seeking without browser freezes
 - **Scalability**: Handles files with millions of cues without degradation
 

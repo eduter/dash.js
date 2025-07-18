@@ -555,6 +555,9 @@ function TextTracks(config) {
                 throw e;
             }
         }
+
+        // After adding new cues, invalidate the cue window
+        resetCueWindowTracking();
     }
 
     function _handleCaptionEvents(currentItem, timeOffset) {
@@ -640,7 +643,6 @@ function TextTracks(config) {
 
     function _handleNonHtmlCaption(currentItem, timeOffset, track) {
         let cue = _getCueInformation(currentItem, timeOffset)
-        cue.isActive = false;
 
         if (currentItem.styles) {
             try {
@@ -745,7 +747,6 @@ function TextTracks(config) {
 
             // Exit cues that are no longer active
             cuesToExit.forEach((cue) => {
-                cue.isActive = false;
                 console.log(`CUE_EXIT: ${cueToString(cue)}`);
                 if (settings.get().streaming.text.dispatchForManualRendering) {
                     _triggerCueExit(cue);
@@ -756,7 +757,6 @@ function TextTracks(config) {
 
             // Enter cues that are newly active
             cuesToEnter.forEach((cue) => {
-                cue.isActive = true;
                 console.log(`CUE_ENTER: ${cueToString(cue)}`);
                 if (settings.get().streaming.text.dispatchForManualRendering) {
                     _triggerCueEnter(cue);
@@ -803,7 +803,6 @@ function TextTracks(config) {
             // Exit all currently active cues for this track
             const currentActiveCues = cueData.activeCues;
             currentActiveCues.forEach((cue) => {
-                cue.isActive = false;
                 console.log(`CUE_EXIT: ${cueToString(cue)}`);
                 if (settings.get().streaming.text.dispatchForManualRendering) {
                     _triggerCueExit(cue);
@@ -924,7 +923,6 @@ function TextTracks(config) {
             );
 
             cuesToRemove.forEach(cue => {
-                cue.isActive = false;
                 console.log(`CUE_EXIT: ${cueToString(cue)}`);
 
                 if (settings.get().streaming.text.dispatchForManualRendering) {

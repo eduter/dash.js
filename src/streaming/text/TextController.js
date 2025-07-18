@@ -96,7 +96,6 @@ function TextController(config) {
         eventBus.on(Events.PLAYBACK_TIME_UPDATED, _onPlaybackTimeUpdated, instance);
         eventBus.on(Events.PLAYBACK_SEEKING, _onPlaybackSeeking, instance);
         eventBus.on(Events.PLAYBACK_SEEKED, _onPlaybackSeeked, instance);
-        eventBus.on(MediaPlayerEvents.FRAGMENT_LOADING_COMPLETED, _onFragmentLoadingCompleted, instance);
     }
 
     function initializeForStream(streamInfo) {
@@ -312,31 +311,13 @@ function TextController(config) {
             const currentTime = videoModel.getTime() || 0;
             const tracks = textTracks[e.streamId];
 
-            // Update cue window when seeking is complete
-            for (let i = 0; i < tracks.getTextTrackInfos().length; i++) {
-                tracks.updateTextTrackWindow(i, currentTime, true);
+            // TODO: what if custom rendering is enabled for VTT, but this video has a CEA 608/708 track?
+            // For native rendering, update the cue window, when seeking is complete
+            if (!settings.get().streaming.text.webvtt.customRenderingEnabled) {
+                for (let i = 0; i < tracks.getTextTrackInfos().length; i++) {
+                    tracks.updateTextTrackWindow(i, currentTime, true);
+                }
             }
-        } catch (e) {
-            logger.error(e);
-        }
-    }
-
-    function _onFragmentLoadingCompleted(e) {
-        logger.debug(`_onFragmentLoadingCompleted() for streamId: ${e.streamId}, mediaType: ${e.mediaType}`);
-        try {
-            // Only handle text fragments
-            if (!e || !e.mediaType || e.mediaType !== Constants.TEXT) {
-                return;
-            }
-
-            if (!textTracks[e.streamId]) {
-                return;
-            }
-
-            // Reset cue window tracking to force update on next time update
-            // This ensures cues have been processed and added to the interval tree
-            textTracks[e.streamId].resetCueWindowTracking();
-            logger.debug('Text fragment loaded, reset cue window tracking to force next update');
         } catch (e) {
             logger.error(e);
         }
