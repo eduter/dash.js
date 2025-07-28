@@ -197,10 +197,9 @@ describe('IntervalTree', function () {
         });
 
         it('should handle point queries', function () {
-            const cues = intervalTree.findCuesInRange(2, 2);
-            expect(cues).to.have.length(2);
-            expect(cues.some(c => c.text === 'First cue')).to.be.true;
-            expect(cues.some(c => c.text === 'Second cue')).to.be.true;
+            const cues = intervalTree.findCuesAtTime(2);
+            expect(cues).to.have.length(1);
+            expect(cues[0].text).to.equal('Second cue');
         });
 
         it('should handle overlapping cues with same start time', function () {
@@ -226,9 +225,8 @@ describe('IntervalTree', function () {
 
         it('should find cue at exact start time', function () {
             const cues = intervalTree.findCuesAtTime(2);
-            expect(cues).to.have.length(2);
-            expect(cues.some(c => c.text === 'First cue')).to.be.true;
-            expect(cues.some(c => c.text === 'Second cue')).to.be.true;
+            expect(cues).to.have.length(1);
+            expect(cues[0].text).to.equal('Second cue');
         });
 
         it('should find cue at middle time', function () {
@@ -243,42 +241,7 @@ describe('IntervalTree', function () {
         });
     });
 
-    describe('Method findCuesInWindow', function () {
-        beforeEach(function () {
-            const cues = [
-                { startTime: 0, endTime: 2, text: 'First cue' },
-                { startTime: 2, endTime: 4, text: 'Second cue' },
-                { startTime: 4, endTime: 6, text: 'Third cue' },
-                { startTime: 6, endTime: 8, text: 'Fourth cue' }
-            ];
-            cues.forEach(cue => intervalTree.addCue(cue));
-        });
 
-        it('should find cues in window around current time', function () {
-            const cues = intervalTree.findCuesInWindow(4, 1);
-            expect(cues).to.have.length(2);
-            expect(cues.some(c => c.text === 'Second cue')).to.be.true;
-            expect(cues.some(c => c.text === 'Third cue')).to.be.true;
-        });
-
-        it('should handle window at start of timeline', function () {
-            const cues = intervalTree.findCuesInWindow(1, 1);
-            expect(cues).to.have.length(1);
-            expect(cues[0].text).to.equal('First cue');
-        });
-
-        it('should handle window at end of timeline', function () {
-            const cues = intervalTree.findCuesInWindow(7, 1);
-            expect(cues).to.have.length(1);
-            expect(cues[0].text).to.equal('Fourth cue');
-        });
-
-        it('should handle negative current time', function () {
-            const cues = intervalTree.findCuesInWindow(-1, 1);
-            expect(cues).to.have.length(1);
-            expect(cues[0].text).to.equal('First cue');
-        });
-    });
 
     describe('Method getAllCues', function () {
         it('should return empty array for empty tree', function () {

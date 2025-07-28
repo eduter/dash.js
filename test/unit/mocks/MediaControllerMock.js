@@ -104,7 +104,7 @@ class MediaControllerMock {
     }
 
     matchSettings(settings, track) {
-        const matchRole = !settings.role || !!track.roles.filter(function (item) {
+        const matchRole = !settings.role || !track.roles || !!track.roles.filter(function (item) {
             return item === settings.role;
         })[0];
         return settings.lang === track.lang && matchRole;

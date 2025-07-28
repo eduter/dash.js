@@ -63,6 +63,15 @@ describe('TextController', function () {
 
         textController.addMediaInfosToBuffer(streamInfo, [mediaInfo, mediaInfo2], mediaInfo.mimeType, null);
         textController.createTracks(streamInfo);
+        
+        // Set up the media controller mock to return proper track structure
+        mediaControllerMock.track = {
+            lang: 'ger',
+            roles: ['main'],
+            index: 0,
+            codec: 'stpp',
+            accessibility: ['captions']
+        };
     });
 
     afterEach(function () {
@@ -141,10 +150,9 @@ describe('TextController', function () {
             
             textController._onPlaybackTimeUpdated(event);
             
-            // Verify that updateTextTrackWindow was called for each track
-            expect(mockTextTracks.updateTextTrackWindow.calledTwice).to.be.true;
-            expect(mockTextTracks.updateTextTrackWindow.firstCall.args).to.deep.equal([0, 15.5, 30, false]);
-            expect(mockTextTracks.updateTextTrackWindow.secondCall.args).to.deep.equal([1, 15.5, 30, false]);
+            // Verify that updateTextTrackWindow was called with correct arguments
+            expect(mockTextTracks.updateTextTrackWindow.calledOnce).to.be.true;
+            expect(mockTextTracks.updateTextTrackWindow.firstCall.args).to.deep.equal([15.5]);
         });
 
         it('should update text track window during seeking', function () {
@@ -158,19 +166,20 @@ describe('TextController', function () {
             // Replace the textTracks with our mock
             textController.textTracks = { [streamInfo.id]: mockTextTracks };
             
-            // Simulate seeking event
+            // Mock videoModel.getTime() to return 25.0
+            videoModelMock.getTime = () => 25.0;
+            
+            // Simulate seeked event
             const event = {
                 streamId: streamInfo.id,
-                seekTime: 25.0
+                time: 25.0
             };
             
-            textController._onPlaybackSeeking(event);
+            textController._onPlaybackSeeked(event);
             
-            // Verify that updateTextTrackWindow was called for each track
-            expect(mockTextTracks.updateTextTrackWindow.calledTwice).to.be.true;
-            expect(mockTextTracks.updateTextTrackWindow.firstCall.args).to.deep.equal([0, 25.0, 30, true]);
-            expect(mockTextTracks.updateTextTrackWindow.secondCall.args).to.deep.equal([1, 25.0, 30, true]);
-            expect(mockTextTracks.disableManualTracks.calledOnce).to.be.true;
+            // Verify that updateTextTrackWindow was called with correct arguments
+            expect(mockTextTracks.updateTextTrackWindow.calledOnce).to.be.true;
+            expect(mockTextTracks.updateTextTrackWindow.firstCall.args).to.deep.equal([25.0, true]);
         });
     });
 
