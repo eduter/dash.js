@@ -223,9 +223,8 @@ describe('TextTracks', function () {
             const track = videoModelMock.getTextTrack('subtitles', 'eng');
 
             // Mock Date.now to test different time intervals
-            const initialTime = Date.now();
             const nowStub = sinon.stub(Date, 'now');
-            nowStub.returns(initialTime);
+            nowStub.returns(0);
 
             const clearTrack = () => {
                 while (track.cues.length > 0) {
@@ -248,12 +247,12 @@ describe('TextTracks', function () {
             expect(track.cues.length).to.equal(0);
 
             // At 9999ms - still within the interval, should not do anything
-            nowStub.returns(initialTime + 9999);
+            nowStub.returns(9999);
             textTracks.updateTextTrackWindow(5);
             expect(track.cues.length).to.equal(0);
 
             // At 10000ms (exactly at the interval) - should update the TextTrack
-            nowStub.returns(initialTime + 10000);
+            nowStub.returns(10000);
             textTracks.updateTextTrackWindow(5);
             expect(track.cues.length).to.equal(1);
 

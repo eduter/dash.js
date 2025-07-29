@@ -123,7 +123,6 @@ function TextTracks(config) {
         captionContainer = videoModel.getTTMLRenderingDiv();
         vttCaptionContainer = videoModel.getVttRenderingDiv();
         let defaultIndex = -1;
-
         for (let i = 0; i < textTrackInfos.length; i++) {
             const nativeTexttrack = _createNativeTextrackElement(textTrackInfos[i]);
 
@@ -150,7 +149,7 @@ function TextTracks(config) {
                 // Initialize the track data for the newly created track
                 tracksCueData.set(textTrack, {
                     allCues: new IntervalTree(),
-                    lastCueWindowUpdate: 0,
+                    lastCueWindowUpdate: -Infinity,
                     activeCues: []
                 });
             }
@@ -207,11 +206,11 @@ function TextTracks(config) {
     }
 
     /**
-     * Updates all native TextTrack's with cues within a window around currentTime.
+     * Updates all native `TextTrack`s with cues within a window around currentTime.
      * Only actually updates the TextTrack periodically, according to bufferPruningInterval setting.
      *
      * @param {number} currentTime - Current playback time
-     * @param {boolean} forceUpdate - Force update even if interval hasn't passed
+     * @param {boolean} forceUpdate - Force an update regardless of time since last update
      */
     function updateTextTrackWindow(currentTime, forceUpdate = false) {
         const trackInfos = getTextTrackInfos();
@@ -223,35 +222,28 @@ function TextTracks(config) {
             const track = getTrackByIdx(trackIdx);
             const cueData = tracksCueData.get(track);
 
+            if (!track || !cueData) {
+                continue;
+            }
+
             // Skip updates for VTT tracks that use custom rendering
             if (!trackInfo.isEmbedded && customVttRenderingEnabled) {
-                logger.debug(`Skipping window update for track ${trackIdx} (VTT with custom rendering)`);
                 continue;
             }
 
-            if (!track || !cueData) {
-                logger.warn(`updateTextTrackWindow: No track or cueData found for track ${trackIdx}`);
-                continue;
-            }
+            const { bufferToKeep, bufferPruningInterval } = settings.get().streaming.buffer;
 
-            // Get buffer configuration from settings
-            const bufferToKeep = settings.get().streaming.buffer.bufferToKeep;
-            const bufferPruningInterval = settings.get().streaming.buffer.bufferPruningInterval;
-
-            // Check if we need to update based on interval
             const now = Date.now();
             const lastUpdate = cueData.lastCueWindowUpdate;
-            const timeSinceLastUpdate = (now - lastUpdate) / 1000; // Convert to seconds
+            const secondsSinceLastUpdate = (now - lastUpdate) / 1000;
 
-            // Only update if enough time has passed or if this is a forced update (seeking)
-            if (timeSinceLastUpdate < bufferPruningInterval && !forceUpdate) {
+            // Only update if enough time has passed or if this is a forced update
+            if (secondsSinceLastUpdate < bufferPruningInterval && !forceUpdate) {
                 continue;
             }
 
-            // Get current playback rate to adjust window for fast/slow playback
-            const playbackRate = videoModel.getPlaybackRate() || 1;
-
             // Calculate window based on buffer settings with safety margin and adjusted for playback rate
+            const playbackRate = videoModel.getPlaybackRate() || 1;
             const windowStart = Math.max(0, currentTime - (bufferToKeep / playbackRate));
             const windowEnd = currentTime + (2 * bufferPruningInterval / playbackRate);
 
@@ -260,7 +252,7 @@ function TextTracks(config) {
                 track.removeCue(track.cues[0]);
             }
 
-            // Add only window cues to TextTrack
+            // Add to TextTrack only cues that are within the current window
             const windowCues = cueData.allCues.findCuesInRange(windowStart, windowEnd);
             windowCues.forEach(cue => {
                 if (track.mode !== Constants.TEXT_DISABLED) {
@@ -268,10 +260,7 @@ function TextTracks(config) {
                 }
             });
 
-            // Update the last update time
             cueData.lastCueWindowUpdate = now;
-
-            logger.debug(`updated cue window to [${windowStart}, ${windowEnd}] for track ${trackIdx} with ${windowCues.length} cues. Current time: ${currentTime}, forceUpdate: ${forceUpdate}, timeSinceLastUpdate: ${timeSinceLastUpdate} seconds, tree size: ${cueData.allCues.getSize()}`);
         }
     }
 
@@ -531,8 +520,6 @@ function TextTracks(config) {
             return;
         }
 
-        const allCues = cueData.allCues;
-
         for (let item = 0; item < captionData.length; item++) {
             let cue = null;
             const currentItem = captionData[item];
@@ -552,7 +539,7 @@ function TextTracks(config) {
 
             try {
                 if (cue) {
-                    allCues.addCue(cue);
+                    cueData.allCues.addCue(cue);
                 } else {
                     logger.error('Impossible to display subtitles. You might have missed setting a TTML rendering div via player.attachTTMLRenderingDiv(TTMLRenderingDiv)');
                 }
@@ -737,7 +724,6 @@ function TextTracks(config) {
             const cueData = tracksCueData.get(track);
 
             if (!cueData) {
-                logger.warn(`manualCueProcessing: No track data found for track`);
                 return;
             }
 
@@ -747,13 +733,8 @@ function TextTracks(config) {
             const cuesToExit = prevActiveCues.filter(cue => !newActiveCues.includes(cue));
             const cuesToEnter = newActiveCues.filter(cue => !prevActiveCues.includes(cue));
 
-            if (cuesToEnter.length > 0 || cuesToExit.length > 0) {
-                console.group(`manualCueProcessing: Processing cues at time ${time} for track`);
-            }
-
             // Exit cues that are no longer active
             cuesToExit.forEach((cue) => {
-                console.log(`CUE_EXIT: ${cueToString(cue)}`);
                 if (settings.get().streaming.text.dispatchForManualRendering) {
                     _triggerCueExit(cue);
                 } else {
@@ -763,7 +744,6 @@ function TextTracks(config) {
 
             // Enter cues that are newly active
             cuesToEnter.forEach((cue) => {
-                console.log(`CUE_ENTER: ${cueToString(cue)}`);
                 if (settings.get().streaming.text.dispatchForManualRendering) {
                     _triggerCueEnter(cue);
                 } else {
@@ -774,11 +754,6 @@ function TextTracks(config) {
 
             // Update the activeCues for this track
             cueData.activeCues = newActiveCues;
-
-            if (cuesToEnter.length > 0 || cuesToExit.length > 0) {
-                console.log('Active Cues:', newActiveCues.map(cueToString));
-                console.groupEnd();
-            }
         }
     }
 
@@ -802,14 +777,11 @@ function TextTracks(config) {
             const cueData = tracksCueData.get(track);
 
             if (!cueData) {
-                logger.warn(`disableManualTracks: No track data found for track`);
                 return;
             }
 
             // Exit all currently active cues for this track
-            const currentActiveCues = cueData.activeCues;
-            currentActiveCues.forEach((cue) => {
-                console.log(`CUE_EXIT: ${cueToString(cue)}`);
+            cueData.activeCues.forEach((cue) => {
                 if (settings.get().streaming.text.dispatchForManualRendering) {
                     _triggerCueExit(cue);
                 } else {
@@ -819,7 +791,6 @@ function TextTracks(config) {
 
             // Clear the activeCues for this track
             cueData.activeCues = [];
-            console.log(`disableManualTracks: Cleared activeCues for track`);
         }
     }
 
@@ -929,8 +900,6 @@ function TextTracks(config) {
             );
 
             cuesToRemove.forEach(cue => {
-                console.log(`CUE_EXIT: ${cueToString(cue)}`);
-
                 if (settings.get().streaming.text.dispatchForManualRendering) {
                     _triggerCueExit(cue);
                 } else {
@@ -981,7 +950,7 @@ function TextTracks(config) {
      */
     function invalidateCueWindow() {
         for (const cueData of tracksCueData.values()) {
-            cueData.lastCueWindowUpdate = 0;
+            cueData.lastCueWindowUpdate = -Infinity;
         }
     }
 
@@ -1046,8 +1015,6 @@ function TextTracks(config) {
         return textTrackInfos
     }
 
-
-
     instance = {
         addCaptions,
         addTextTrackInfo,
@@ -1062,10 +1029,10 @@ function TextTracks(config) {
         getTrackIdxForId,
         initialize,
         manualCueProcessing,
-        invalidateCueWindow,
         setCurrentTrackIdx,
         setModeForTrackIdx,
         updateTextTrackWindow,
+        invalidateCueWindow,
     };
 
     setup();
@@ -1082,6 +1049,3 @@ function TextTracks(config) {
 
 TextTracks.__dashjs_factory_name = 'TextTracks';
 export default FactoryMaker.getClassFactory(TextTracks);
-
-// TODO: remove this
-const cueToString = (cue) => `[${cue.startTime}, ${cue.endTime}) ${cue.text || cue.cueID}`;
