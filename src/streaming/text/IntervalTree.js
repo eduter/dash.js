@@ -69,17 +69,6 @@ class IntervalTree {
     }
 
     /**
-     * Checks if a cue already exists in the tree (duplicate detection).
-     *
-     * @param {TextTrackCue} cue - The cue to check
-     * @returns {boolean} True if the cue already exists
-     */
-    hasCue(cue) {
-        const overlapping = this.findCuesInRange(cue.startTime, cue.endTime);
-        return overlapping.some(existing => this._compareCues(existing, cue) === 0);
-    }
-
-    /**
      * Finds all cues that overlap with the given time range.
      *
      * @param {number} start - Start time of the range
@@ -101,6 +90,8 @@ class IntervalTree {
     findCuesAtTime(time) {
         return this.findCuesInRange(time, time);
     }
+
+    // Methods for testing and debugging
 
     /**
      * Gets all cues in the tree.

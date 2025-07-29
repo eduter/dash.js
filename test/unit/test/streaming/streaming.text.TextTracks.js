@@ -5,7 +5,7 @@ import MediaPlayerEvents from '../../../../src/streaming/MediaPlayerEvents.js';
 import VoHelper from '../../helpers/VOHelper.js';
 import VideoModelMock from '../../mocks/VideoModelMock.js';
 import Settings from '../../../../src/core/Settings.js';
-import chai from 'chai';
+import chai, {expect} from 'chai';
 import spies from 'chai-spies';
 import sinon from 'sinon';
 
@@ -14,7 +14,6 @@ Events.extend(MediaPlayerEvents);
 
 const SUBTITLE_DATA = 'subtitle line 1';
 
-const expect = chai.expect;
 const context = {};
 const eventBus = EventBus(context).getInstance();
 
